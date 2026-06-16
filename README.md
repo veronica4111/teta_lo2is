@@ -1,7 +1,4 @@
 
-  # Complete the task
-
-  This is a code bundle for Complete the task. The original project is available at https://www.figma.com/design/rZATKASQaTsmyVpCjtNRbV/Complete-the-task.
 
   ## Running the code
 
