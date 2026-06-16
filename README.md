@@ -50,7 +50,7 @@ Make sure you have [Node.js](https://nodejs.org/) installed on your machine.
 
 To start the local development server:
 ```bash
-npm run dev
+npm run start
 ```
 
 ### Production Build & Deployment
