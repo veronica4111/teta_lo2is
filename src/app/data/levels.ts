@@ -61,7 +61,7 @@ function q(
       { id: 'd', text: d, color: 'yellow' },
     ],
     correctAnswerId: correctId,
-    audioUrl: `/audio/levels/level${level}/question${qNum}.mp3`,
+    audioUrl: `audio/levels/level${level}/question${qNum}.mp3`,
   };
 }
 
@@ -69,7 +69,7 @@ export const LEVELS: Level[] = [
   {
     id: 'level_1',
     nameAr: 'المستوى الأول',
-    videoUrl: '/video/level1/story.mp4',
+    videoUrl: 'video/level1/story.mp4',
     thumbnail: '🌿',
     color: '#22C55E',
     bgColor: '#DCFCE7',
@@ -87,7 +87,7 @@ export const LEVELS: Level[] = [
   {
     id: 'level_2',
     nameAr: 'المستوى التاني',
-    videoUrl: '/video/level2/story.mp4',
+    videoUrl: 'video/level2/story.mp4',
     thumbnail: '🌊',
     color: '#3B82F6',
     bgColor: '#DBEAFE',
@@ -106,7 +106,7 @@ export const LEVELS: Level[] = [
   {
     id: 'level_3',
     nameAr: 'المستوى التالت',
-    videoUrl: '/video/level3/story.mp4',
+    videoUrl: 'video/level3/story.mp4',
     thumbnail: '🏜️',
     color: '#F59E0B',
     bgColor: '#FEF3C7',
@@ -125,7 +125,7 @@ export const LEVELS: Level[] = [
   {
     id: 'level_4',
     nameAr: 'المستوى الرابع',
-    videoUrl: '/video/level4/story.mp4',
+    videoUrl: 'video/level4/story.mp4',
     thumbnail: '⛰️',
     color: '#8B5CF6',
     bgColor: '#EDE9FE',
@@ -143,7 +143,7 @@ export const LEVELS: Level[] = [
   {
     id: 'level_5',
     nameAr: 'المستوى الخامس',
-    videoUrl: '/video/level5/story.mp4',
+    videoUrl: 'video/level5/story.mp4',
     thumbnail: '🌸',
     color: '#EC4899',
     bgColor: '#FCE7F3',
@@ -161,7 +161,7 @@ export const LEVELS: Level[] = [
   {
     id: 'level_6',
     nameAr: 'المستوى السادس',
-    videoUrl: '/video/level6/story.mp4',
+    videoUrl: 'video/level6/story.mp4',
     thumbnail: '⭐',
     color: '#F97316',
     bgColor: '#FFEDD5',

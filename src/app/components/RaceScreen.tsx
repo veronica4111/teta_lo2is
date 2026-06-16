@@ -27,29 +27,84 @@ const OBSTACLE_COLORS = [
 ];
 
 function toArabicNumerals(n: number): string {
-  return String(Math.round(n)).replace(/[0-9]/g, (d) => ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'][parseInt(d)]);
+  return String(Math.round(n)).replace(/[0-9]/g, (d) => ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'][parseInt(d)]);
 }
 
-// Road geometry (percentage units of 100x100 viewBox)
-const VP = { x: 50, y: 37 }; // vanishing point
-const ROAD_LEFT_BOTTOM = 13;
-const ROAD_RIGHT_BOTTOM = 87;
-const ROAD_BOTTOM = 100;
+// ─────────────────────────────────────────────────────────────
+//  ROAD GEOMETRY  (100×100 viewBox units)
+//
+//  Design goals matching the reference image:
+//   • Road horizon sits at y=33, giving 33% sky — mountains visible
+//   • Road is WIDE at bottom (full screen width), narrows to a clear
+//     band at horizon (~12 units wide) — never a point
+//   • True perspective: Y spacing compresses exponentially near horizon
+//   • Crest strip above horizon shows road "going over the hill"
+// ─────────────────────────────────────────────────────────────
 
-// 4 lane edge x-positions at bottom
-const LANE_EDGES_BOTTOM = [ROAD_LEFT_BOTTOM, 37, 63, ROAD_RIGHT_BOTTOM];
-// Lane centers at bottom
-const LANE_CENTERS_BOTTOM = [25, 50, 75];
+const VP_X = 50;           // Vanishing point x (dead centre)
+const HORIZON_Y = 33;     // Y of vanishing horizon line
+const ROAD_BOTTOM = 100;   // Bottom of viewbox
 
-function laneXAtT(lane: number, t: number): number {
-  return VP.x + (LANE_CENTERS_BOTTOM[lane] - VP.x) * t;
+// Road width at bottom and at horizon (in viewBox units from VP_X each side)
+const ROAD_HALF_BOTTOM = 42;   // → road spans x=8..92 at viewer's feet
+const ROAD_HALF_HORIZON = 6.5;  // → road spans x=43.5..56.5 at horizon  (clearly visible!)
+
+// Lane divider inner edges (bottom x, mirrored around VP_X)
+// 3 lanes → 4 edges.  Outer edges = road edges.
+const LANE_OFFSETS_BOTTOM = [ROAD_HALF_BOTTOM, 28, 14, 0]; // distance from VP_X at bottom
+
+// Lane centres at bottom (used for car placement)
+const LANE_CENTERS_BOTTOM = [VP_X - 21, VP_X, VP_X + 21]; // left / centre / right
+
+// Road continuation "crest" above the horizon — key illusion
+const CREST_Y = HORIZON_Y - 5;
+const CREST_HALF = ROAD_HALF_HORIZON * 0.55;  // narrower as it crests the hill
+
+/**
+ * True perspective projection.
+ *
+ * t=0 → at the horizon, t=1 → at the player's feet.
+ *
+ * We interpolate between horizonX and bottomX using a power curve
+ * that compresses distances near the horizon (objects bunch up in
+ * the distance, just like real life).  The horizon values are
+ * guaranteed non-zero, so the road NEVER collapses to a point.
+ */
+function perspX(bottomOffset: number, t: number): number {
+  // horizonOffset is the proportionally smaller value at the horizon
+  const ratio = ROAD_HALF_HORIZON / ROAD_HALF_BOTTOM;
+  const horizonOffset = bottomOffset * ratio;
+  // Exponential easing: very compressed near t=0, expanding rapidly near t=1
+  const ease = Math.pow(t, 0.65);
+  return horizonOffset + (bottomOffset - horizonOffset) * ease;
 }
+
+// Road outer edges at any depth t
+function roadLeftX(t: number) { return VP_X - perspX(ROAD_HALF_BOTTOM, t); }
+function roadRightX(t: number) { return VP_X + perspX(ROAD_HALF_BOTTOM, t); }
+
+function laneDiv1X(t: number) { return VP_X - perspX(LANE_OFFSETS_BOTTOM[2], t); }
+function laneDiv2X(t: number) { return VP_X + perspX(LANE_OFFSETS_BOTTOM[2], t); }
+
+// Y at depth t (non-linear: compressed near horizon)
 function yAtT(t: number): number {
-  return VP.y + (ROAD_BOTTOM - VP.y) * t;
+  // Quadratic compression so middle distance looks more natural
+  return HORIZON_Y + (ROAD_BOTTOM - HORIZON_Y) * t;
 }
-function edgeXAtT(edgeIdx: number, t: number): number {
-  return VP.x + (LANE_EDGES_BOTTOM[edgeIdx] - VP.x) * t;
+
+// Lane center X at depth t
+function laneXAtT(lane: number, t: number): number {
+  const offBottom = Math.abs(LANE_CENTERS_BOTTOM[lane] - VP_X);
+  const sign = Math.sign(LANE_CENTERS_BOTTOM[lane] - VP_X);
+  return VP_X + sign * perspX(offBottom, t);
 }
+
+// Precomputed horizon road edges
+const RHL = VP_X - ROAD_HALF_HORIZON;   // Road Horizon Left
+const RHR = VP_X + ROAD_HALF_HORIZON;   // Road Horizon Right
+
+// Scrolling bollard positions (static x per side, animated y)
+const BOLLARD_T_POSITIONS = [0.12, 0.22, 0.34, 0.48, 0.63, 0.79];
 
 export function RaceScreen({ level, onGameOver, onBack }: RaceScreenProps) {
   const [fuel, setFuel] = useState(100);
@@ -256,7 +311,7 @@ export function RaceScreen({ level, onGameOver, onBack }: RaceScreenProps) {
 
   const fuelBarColor =
     fuelState === 'critical' ? '#EF4444' :
-    fuelState === 'low' ? '#F59E0B' : '#22C55E';
+      fuelState === 'low' ? '#F59E0B' : '#22C55E';
 
   // Clouds positions (static for now)
   const clouds = [
@@ -282,101 +337,342 @@ export function RaceScreen({ level, onGameOver, onBack }: RaceScreenProps) {
         style={{ display: 'block' }}
       >
         <defs>
+          {/* ── SKY gradient: deep blue → pale horizon haze ── */}
           <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#60A5FA" />
-            <stop offset="60%" stopColor="#BAE6FD" />
-            <stop offset="100%" stopColor="#E0F7FF" />
+            <stop offset="0%" stopColor="#1A5BB5" />
+            <stop offset="40%" stopColor="#3D8EE8" />
+            <stop offset="75%" stopColor="#79C0F5" />
+            <stop offset="100%" stopColor="#C5E8FF" />
           </linearGradient>
-          <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#4ADE80" />
-            <stop offset="100%" stopColor="#16A34A" />
-          </linearGradient>
+
+          {/* ── ROAD: dark asphalt at viewer, lighter/hazier at horizon ── */}
           <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#78716C" />
-            <stop offset="100%" stopColor="#44403C" />
+            <stop offset="0%" stopColor="#9B9590" />
+            <stop offset="18%" stopColor="#777270" />
+            <stop offset="100%" stopColor="#3E3C3A" />
           </linearGradient>
+
+          {/* ── Road crest continuation above horizon ── */}
+          <linearGradient id="roadCrest" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#B5B0AB" stopOpacity="0.0" />
+            <stop offset="100%" stopColor="#9B9590" stopOpacity="1.0" />
+          </linearGradient>
+
+          {/* ── Grass ground ── */}
+          <linearGradient id="grassGround" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3EC95A" />
+            <stop offset="100%" stopColor="#1A7A30" />
+          </linearGradient>
+
+          {/* ── Horizon mist over road ── */}
+          <linearGradient id="roadMist" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#AEDCFF" stopOpacity="0.50" />
+            <stop offset="35%" stopColor="#AEDCFF" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#AEDCFF" stopOpacity="0.0" />
+          </linearGradient>
+
+          {/* ── Verge grass darkening towards road ── */}
+          <linearGradient id="verge" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#52D96B" />
+            <stop offset="100%" stopColor="#1E8C34" />
+          </linearGradient>
+
+          {/* ── Vignette for fuel warning ── */}
           <radialGradient id="redVignette" cx="50%" cy="50%" r="50%">
-            <stop offset="60%" stopColor="transparent" />
-            <stop offset="100%" stopColor={fuelState !== 'normal' ? '#EF4444' : 'transparent'} stopOpacity={fuelState === 'critical' ? 0.35 : 0.18} />
+            <stop offset="55%" stopColor="transparent" />
+            <stop offset="100%" stopColor={fuelState !== 'normal' ? '#EF4444' : 'transparent'}
+              stopOpacity={fuelState === 'critical' ? 0.4 : 0.2} />
           </radialGradient>
+
+          {/* ── Bottom vignette (adds ground shadow, frames scene) ── */}
+          <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="70%" stopColor="black" stopOpacity="0" />
+            <stop offset="100%" stopColor="black" stopOpacity="0.35" />
+          </linearGradient>
+
+          {/* ── Clip so road doesn't draw above horizon ── */}
+          <clipPath id="belowHorizon">
+            <rect x="0" y={HORIZON_Y} width="100" height={ROAD_BOTTOM} />
+          </clipPath>
+          <clipPath id="aboveHorizon">
+            <rect x="0" y="0" width="100" height={HORIZON_Y} />
+          </clipPath>
         </defs>
 
-        {/* Sky */}
-        <rect width="100" height={VP.y + 3} fill="url(#sky)" />
+        {/* ════════════════════════════════════════════════════
+            LAYER 1 — SKY
+        ════════════════════════════════════════════════════ */}
+        <rect width="100" height="100" fill="url(#sky)" />
 
-        {/* Clouds */}
-        {clouds.map((c, i) => (
-          <ellipse key={i} cx={c.x} cy={c.y} rx={c.w / 2} ry={c.h / 2} fill="white" opacity="0.85" />
+        {/* ════════════════════════════════════════════════════
+            LAYER 2 — DISTANT MOUNTAINS  (behind everything)
+            Sharp rocky peaks, snow caps, atmospheric tint
+        ════════════════════════════════════════════════════ */}
+
+        {/* Layer A: farthest, most desaturated blue-grey */}
+        <polygon points={`2,${HORIZON_Y} 12,${HORIZON_Y - 14} 22,${HORIZON_Y}`} fill="#7B8EC5" opacity="0.45" />
+        <polygon points={`10,${HORIZON_Y} 22,${HORIZON_Y - 18} 34,${HORIZON_Y}`} fill="#6E82BE" opacity="0.45" />
+        <polygon points={`30,${HORIZON_Y} 42,${HORIZON_Y - 20} 56,${HORIZON_Y}`} fill="#6878B8" opacity="0.50" />
+        <polygon points={`44,${HORIZON_Y} 50,${HORIZON_Y - 15} 58,${HORIZON_Y}`} fill="#7080C0" opacity="0.42" />
+        <polygon points={`54,${HORIZON_Y} 65,${HORIZON_Y - 22} 78,${HORIZON_Y}`} fill="#6575B8" opacity="0.50" />
+        <polygon points={`68,${HORIZON_Y} 80,${HORIZON_Y - 17} 92,${HORIZON_Y}`} fill="#7082BE" opacity="0.45" />
+        <polygon points={`80,${HORIZON_Y} 90,${HORIZON_Y - 13} 100,${HORIZON_Y}`} fill="#7A8EC5" opacity="0.42" />
+
+        {/* Layer B: mid range, greener-grey, taller */}
+        <polygon points={`-2,${HORIZON_Y} 10,${HORIZON_Y - 11} 20,${HORIZON_Y}`} fill="#5E7A5E" opacity="0.72" />
+        <polygon points={`14,${HORIZON_Y} 26,${HORIZON_Y - 15} 38,${HORIZON_Y}`} fill="#507050" opacity="0.72" />
+        <polygon points={`35,${HORIZON_Y} 44,${HORIZON_Y - 11} 52,${HORIZON_Y}`} fill="#4E6E4E" opacity="0.72" />
+        <polygon points={`60,${HORIZON_Y} 72,${HORIZON_Y - 14} 84,${HORIZON_Y}`} fill="#507050" opacity="0.72" />
+        <polygon points={`78,${HORIZON_Y} 88,${HORIZON_Y - 10} 100,${HORIZON_Y}`} fill="#5E7A5E" opacity="0.70" />
+
+        {/* Snow caps on tallest peaks */}
+        <polygon points={`14,${HORIZON_Y - 15} 17,${HORIZON_Y - 18.5} 20,${HORIZON_Y - 15}`} fill="white" opacity="0.6" />
+        <polygon points={`40,${HORIZON_Y - 17} 44,${HORIZON_Y - 21} 48,${HORIZON_Y - 17}`} fill="white" opacity="0.6" />
+        <polygon points={`62,${HORIZON_Y - 19} 65,${HORIZON_Y - 23} 68,${HORIZON_Y - 19}`} fill="white" opacity="0.6" />
+
+        {/* ════════════════════════════════════════════════════
+            LAYER 3 — NEAR HILLS  (rolling, bright green)
+            These overlap the horizon and define the valley
+        ════════════════════════════════════════════════════ */}
+        <ellipse cx="5" cy={HORIZON_Y + 2} rx="14" ry="7" fill="#4DD866" />
+        <ellipse cx="22" cy={HORIZON_Y + 1} rx="18" ry="8" fill="#45D060" />
+        <ellipse cx="40" cy={HORIZON_Y + 2} rx="14" ry="6" fill="#50D868" />
+        <ellipse cx="60" cy={HORIZON_Y + 2} rx="14" ry="6" fill="#50D868" />
+        <ellipse cx="78" cy={HORIZON_Y + 1} rx="18" ry="8" fill="#45D060" />
+        <ellipse cx="95" cy={HORIZON_Y + 2} rx="14" ry="7" fill="#4DD866" />
+        {/* Central hill the road crests over */}
+        <ellipse cx={VP_X} cy={HORIZON_Y + 2} rx="16" ry="6" fill="#4ADE80" />
+
+        {/* ════════════════════════════════════════════════════
+            LAYER 4 — BACKGROUND TREE LINE  (horizon forest)
+            Dense silhouette just above horizon level
+        ════════════════════════════════════════════════════ */}
+        {/* Left forest wall */}
+        {[-2, 3, 8, 13, 17, 22].map((bx, i) => (
+          <g key={`bfl${i}`}>
+            <rect x={bx} y={HORIZON_Y - 4} width="1.2" height="4" fill="#2D5A2D" opacity="0.8" />
+            <polygon points={`${bx + 0.6},${HORIZON_Y - 11} ${bx - 2},${HORIZON_Y - 4} ${bx + 3.2},${HORIZON_Y - 4}`}
+              fill="#2D5A2D" opacity="0.8" />
+          </g>
+        ))}
+        {/* Right forest wall */}
+        {[78, 82, 87, 91, 96, 100].map((bx, i) => (
+          <g key={`bfr${i}`}>
+            <rect x={bx} y={HORIZON_Y - 4} width="1.2" height="4" fill="#2D5A2D" opacity="0.8" />
+            <polygon points={`${bx + 0.6},${HORIZON_Y - 11} ${bx - 2},${HORIZON_Y - 4} ${bx + 3.2},${HORIZON_Y - 4}`}
+              fill="#2D5A2D" opacity="0.8" />
+          </g>
         ))}
 
-        {/* Horizon hills */}
-        <ellipse cx="20" cy={VP.y} rx="18" ry="8" fill="#86EFAC" />
-        <ellipse cx="80" cy={VP.y} rx="18" ry="8" fill="#86EFAC" />
-        <ellipse cx="50" cy={VP.y + 1} rx="8" ry="4" fill="#4ADE80" />
+        {/* ════════════════════════════════════════════════════
+            LAYER 5 — GROUND & GRASS VERGES
+        ════════════════════════════════════════════════════ */}
+        <rect x="0" y={HORIZON_Y} width="100" height={ROAD_BOTTOM - HORIZON_Y + 5}
+          fill="url(#grassGround)" />
 
-        {/* Grass */}
-        <rect x="0" y={VP.y - 2} width="100" height={ROAD_BOTTOM - VP.y + 5} fill="url(#grass)" />
+        {/* ════════════════════════════════════════════════════
+            LAYER 6 — ROAD (crest + main trapezoid)
+        ════════════════════════════════════════════════════ */}
 
-        {/* Palm trees left side */}
-        {[30, 55, 78].map((yPos, i) => {
-          const t = (yPos - VP.y) / (ROAD_BOTTOM - VP.y);
-          const x = edgeXAtT(0, t) - 4 * t;
-          const scale = t * 0.8 + 0.2;
-          return (
-            <g key={i} transform={`translate(${x}, ${yPos}) scale(${scale})`}>
-              <rect x="-0.8" y="-6" width="1.6" height="6" fill="#92400E" />
-              <ellipse cx="0" cy="-6" rx="3.5" ry="2.5" fill="#15803D" />
-              <ellipse cx="-2" cy="-5.5" rx="2.5" ry="1.5" fill="#16A34A" />
-              <ellipse cx="2" cy="-5.5" rx="2.5" ry="1.5" fill="#16A34A" />
-            </g>
-          );
-        })}
-
-        {/* Trees right side */}
-        {[32, 58, 75].map((yPos, i) => {
-          const t = (yPos - VP.y) / (ROAD_BOTTOM - VP.y);
-          const x = edgeXAtT(3, t) + 4 * t;
-          const scale = t * 0.8 + 0.2;
-          return (
-            <g key={i} transform={`translate(${x}, ${yPos}) scale(${scale})`}>
-              <rect x="-0.8" y="-7" width="1.6" height="7" fill="#713F12" />
-              <polygon points="0,-12 -3.5,-5 3.5,-5" fill="#15803D" />
-              <polygon points="0,-10 -4,-4 4,-4" fill="#16A34A" />
-            </g>
-          );
-        })}
-
-        {/* Road trapezoid */}
+        {/* Road crest — peeks above horizon so road appears to go over the hill */}
         <polygon
-          points={`${VP.x},${VP.y} ${ROAD_RIGHT_BOTTOM},${ROAD_BOTTOM} ${ROAD_LEFT_BOTTOM},${ROAD_BOTTOM}`}
+          points={`${VP_X - CREST_HALF},${CREST_Y} ${VP_X + CREST_HALF},${CREST_Y} ${RHR},${HORIZON_Y} ${RHL},${HORIZON_Y}`}
+          fill="url(#roadCrest)"
+        />
+        {/* White edge lines on crest */}
+        <line x1={VP_X - CREST_HALF} y1={CREST_Y} x2={RHL} y2={HORIZON_Y}
+          stroke="white" strokeWidth="0.25" opacity="0.55" />
+        <line x1={VP_X + CREST_HALF} y1={CREST_Y} x2={RHR} y2={HORIZON_Y}
+          stroke="white" strokeWidth="0.25" opacity="0.55" />
+
+        {/* Main road trapezoid */}
+        <polygon
+          points={`${RHL},${HORIZON_Y} ${RHR},${HORIZON_Y} ${VP_X + ROAD_HALF_BOTTOM},${ROAD_BOTTOM} ${VP_X - ROAD_HALF_BOTTOM},${ROAD_BOTTOM}`}
           fill="url(#road)"
         />
 
-        {/* Road edge lines */}
-        <line x1={VP.x} y1={VP.y} x2={ROAD_LEFT_BOTTOM} y2={ROAD_BOTTOM} stroke="white" strokeWidth="0.4" opacity="0.9" />
-        <line x1={VP.x} y1={VP.y} x2={ROAD_RIGHT_BOTTOM} y2={ROAD_BOTTOM} stroke="white" strokeWidth="0.4" opacity="0.9" />
+        {/* Grass verge strips — narrow coloured shoulders between road and trees */}
+        {/* Left verge */}
+        <polygon
+          points={`${RHL - 3},${HORIZON_Y} ${RHL},${HORIZON_Y} ${VP_X - ROAD_HALF_BOTTOM},${ROAD_BOTTOM} ${VP_X - ROAD_HALF_BOTTOM - 10},${ROAD_BOTTOM}`}
+          fill="url(#verge)"
+        />
+        {/* Right verge */}
+        <polygon
+          points={`${RHR},${HORIZON_Y} ${RHR + 3},${HORIZON_Y} ${VP_X + ROAD_HALF_BOTTOM + 10},${ROAD_BOTTOM} ${VP_X + ROAD_HALF_BOTTOM},${ROAD_BOTTOM}`}
+          fill="url(#verge)"
+        />
 
-        {/* Lane dividers (dashed, animated scroll) */}
-        {[1, 2].map((edgeIdx) => {
-          const segments = 8;
+        {/* White road edge lines */}
+        <line x1={RHL} y1={HORIZON_Y} x2={VP_X - ROAD_HALF_BOTTOM} y2={ROAD_BOTTOM}
+          stroke="white" strokeWidth="0.6" opacity="0.95" />
+        <line x1={RHR} y1={HORIZON_Y} x2={VP_X + ROAD_HALF_BOTTOM} y2={ROAD_BOTTOM}
+          stroke="white" strokeWidth="0.6" opacity="0.95" />
+
+        {/* ════════════════════════════════════════════════════
+            LAYER 7 — LANE MARKINGS
+            3 bold dashed white lines, perspective-scaled
+        ════════════════════════════════════════════════════ */}
+        {[laneDiv1X, laneDiv2X].map((divFn, di) => {
+          const segments = 14;
           return Array.from({ length: segments }).map((_, seg) => {
             const tStart = ((seg / segments) + scrollOffset / 100) % 1;
-            const tEnd = tStart + 0.06;
-            if (tEnd > 1) return null;
+            const tEnd = Math.min(tStart + 0.038, 0.99);
+            if (tStart < 0.015 || tEnd >= 1) return null;
+            // Perspective-scaled width and opacity
+            const w = 0.12 + tStart * 0.5;
+            const op = 0.45 + tStart * 0.5;
             return (
-              <line
-                key={`${edgeIdx}-${seg}`}
-                x1={edgeXAtT(edgeIdx, tStart)}
-                y1={yAtT(tStart)}
-                x2={edgeXAtT(edgeIdx, tEnd)}
-                y2={yAtT(tEnd)}
-                stroke="white"
-                strokeWidth="0.3"
-                opacity="0.7"
+              <line key={`ld${di}-${seg}`}
+                x1={divFn(tStart)} y1={yAtT(tStart)}
+                x2={divFn(tEnd)} y2={yAtT(tEnd)}
+                stroke="white" strokeWidth={w} opacity={op}
               />
             );
           });
         })}
+
+        {/* ════════════════════════════════════════════════════
+            LAYER 8 — ROADSIDE BOLLARDS  (animated scroll)
+            White posts with orange reflector, appear on both kerbs
+        ════════════════════════════════════════════════════ */}
+        {BOLLARD_T_POSITIONS.map((tBase, bi) => {
+          const t = ((tBase + scrollOffset * 0.008) % 0.92) + 0.06;
+          if (t > 0.93) return null;
+          const y = yAtT(t);
+          const sc = 0.3 + t * 0.8;   // scale with depth
+          const lx = roadLeftX(t) - 1.2 * sc;
+          const rx = roadRightX(t) + 1.2 * sc;
+          return (
+            <g key={`bol${bi}`} opacity={0.6 + t * 0.35}>
+              {/* Left bollard */}
+              <rect x={lx - 0.3 * sc} y={y - 2.2 * sc} width={0.6 * sc} height={2.2 * sc} fill="white" rx={0.15 * sc} />
+              <rect x={lx - 0.35 * sc} y={y - 2.7 * sc} width={0.7 * sc} height={0.5 * sc} fill="#F97316" rx={0.1 * sc} />
+              {/* Right bollard */}
+              <rect x={rx - 0.3 * sc} y={y - 2.2 * sc} width={0.6 * sc} height={2.2 * sc} fill="white" rx={0.15 * sc} />
+              <rect x={rx - 0.35 * sc} y={y - 2.7 * sc} width={0.7 * sc} height={0.5 * sc} fill="#F97316" rx={0.1 * sc} />
+            </g>
+          );
+        })}
+
+        {/* ════════════════════════════════════════════════════
+            LAYER 9 — ROADSIDE TREES  (depth-sorted, dense)
+            Left bank: mix of pine + round deciduous
+            Right bank: same, offset so they interleave
+            Trees get bigger + more spread out near viewer
+        ════════════════════════════════════════════════════ */}
+
+        {/* Helper render functions defined inline as arrays */}
+        {/* LEFT TREES — 10 trees */}
+        {[
+          { t: 0.08, type: 'pine', spread: 5 },
+          { t: 0.14, type: 'round', spread: 6 },
+          { t: 0.21, type: 'pine', spread: 7 },
+          { t: 0.29, type: 'round', spread: 8 },
+          { t: 0.38, type: 'pine', spread: 9 },
+          { t: 0.48, type: 'round', spread: 10 },
+          { t: 0.58, type: 'pine', spread: 11 },
+          { t: 0.68, type: 'round', spread: 12 },
+          { t: 0.78, type: 'pine', spread: 13 },
+          { t: 0.88, type: 'round', spread: 14 },
+        ].map(({ t, type, spread }, i) => {
+          const y = yAtT(t);
+          const lx = roadLeftX(t);
+          const sc = 0.18 + t * 1.6;
+          const tx = lx - spread * (0.3 + t * 0.7);
+          return (
+            <g key={`lt${i}`} transform={`translate(${tx},${y}) scale(${sc})`}>
+              {type === 'pine' ? (
+                // Dark conifer — tall triangle with layered tiers
+                <>
+                  <rect x="-0.5" y="-9" width="1" height="9" fill="#5D3A1A" />
+                  <polygon points="0,-18 -3.5,-11 3.5,-11" fill="#1A4A1A" />
+                  <polygon points="0,-14 -4.5,-8  4.5,-8" fill="#1E5A1E" />
+                  <polygon points="0,-10 -5.5,-4  5.5,-4" fill="#236B23" />
+                  <polygon points="0,-6  -6.5,-1  6.5,-1" fill="#267826" />
+                </>
+              ) : (
+                // Round deciduous — trunk + layered canopy
+                <>
+                  <rect x="-0.6" y="-7" width="1.2" height="7" fill="#6B3A10" />
+                  <ellipse cx="0" cy="-10" rx="5" ry="4.5" fill="#1A5C1A" />
+                  <ellipse cx="-2.5" cy="-9" rx="3.5" ry="3" fill="#1E6B1E" />
+                  <ellipse cx="2.5" cy="-9" rx="3.5" ry="3" fill="#1E6B1E" />
+                  <ellipse cx="0" cy="-7.5" rx="4" ry="2.5" fill="#267826" />
+                </>
+              )}
+            </g>
+          );
+        })}
+
+        {/* RIGHT TREES — 10 trees (offset depths for interleave) */}
+        {[
+          { t: 0.10, type: 'round', spread: 5 },
+          { t: 0.17, type: 'pine', spread: 6 },
+          { t: 0.25, type: 'round', spread: 7 },
+          { t: 0.33, type: 'pine', spread: 8 },
+          { t: 0.43, type: 'round', spread: 9 },
+          { t: 0.53, type: 'pine', spread: 10 },
+          { t: 0.63, type: 'round', spread: 11 },
+          { t: 0.73, type: 'pine', spread: 12 },
+          { t: 0.83, type: 'round', spread: 13 },
+          { t: 0.93, type: 'pine', spread: 14 },
+        ].map(({ t, type, spread }, i) => {
+          const y = yAtT(t);
+          const rx = roadRightX(t);
+          const sc = 0.18 + t * 1.6;
+          const tx = rx + spread * (0.3 + t * 0.7);
+          return (
+            <g key={`rt${i}`} transform={`translate(${tx},${y}) scale(${sc})`}>
+              {type === 'pine' ? (
+                <>
+                  <rect x="-0.5" y="-9" width="1" height="9" fill="#5D3A1A" />
+                  <polygon points="0,-18 -3.5,-11 3.5,-11" fill="#1A4A1A" />
+                  <polygon points="0,-14 -4.5,-8  4.5,-8" fill="#1E5A1E" />
+                  <polygon points="0,-10 -5.5,-4  5.5,-4" fill="#236B23" />
+                  <polygon points="0,-6  -6.5,-1  6.5,-1" fill="#267826" />
+                </>
+              ) : (
+                <>
+                  <rect x="-0.6" y="-7" width="1.2" height="7" fill="#6B3A10" />
+                  <ellipse cx="0" cy="-10" rx="5" ry="4.5" fill="#1A5C1A" />
+                  <ellipse cx="-2.5" cy="-9" rx="3.5" ry="3" fill="#1E6B1E" />
+                  <ellipse cx="2.5" cy="-9" rx="3.5" ry="3" fill="#1E6B1E" />
+                  <ellipse cx="0" cy="-7.5" rx="4" ry="2.5" fill="#267826" />
+                </>
+              )}
+            </g>
+          );
+        })}
+
+        {/* ════════════════════════════════════════════════════
+            LAYER 10 — HORIZON ATMOSPHERIC MIST
+            Softens road/sky join, adds depth
+        ════════════════════════════════════════════════════ */}
+        <polygon
+          points={`${RHL},${HORIZON_Y} ${RHR},${HORIZON_Y} ${VP_X + ROAD_HALF_BOTTOM},${ROAD_BOTTOM} ${VP_X - ROAD_HALF_BOTTOM},${ROAD_BOTTOM}`}
+          fill="url(#roadMist)"
+          style={{ pointerEvents: 'none' }}
+        />
+
+        {/* ════════════════════════════════════════════════════
+            LAYER 11 — CLOUDS  (layered, volumetric)
+        ════════════════════════════════════════════════════ */}
+        {clouds.map((c, i) => (
+          <g key={i} opacity="0.92">
+            {/* Shadow base */}
+            <ellipse cx={c.x} cy={c.y + c.h * 0.2} rx={c.w * 0.48} ry={c.h * 0.38} fill="#D8EEFF" />
+            {/* Main body */}
+            <ellipse cx={c.x} cy={c.y} rx={c.w * 0.5} ry={c.h * 0.45} fill="white" />
+            {/* Puffs */}
+            <ellipse cx={c.x - c.w * 0.2} cy={c.y - c.h * 0.1} rx={c.w * 0.3} ry={c.h * 0.38} fill="white" />
+            <ellipse cx={c.x + c.w * 0.18} cy={c.y - c.h * 0.08} rx={c.w * 0.28} ry={c.h * 0.35} fill="white" />
+            <ellipse cx={c.x + c.w * 0.05} cy={c.y - c.h * 0.22} rx={c.w * 0.2} ry={c.h * 0.28} fill="white" />
+          </g>
+        ))}
+
+        {/* Bottom scene vignette — grounds the scene */}
+        <rect width="100" height="100" fill="url(#bottomVignette)" style={{ pointerEvents: 'none' }} />
 
         {/* Obstacle cars */}
         {obstacles.map((obs) => {
@@ -454,15 +750,28 @@ export function RaceScreen({ level, onGameOver, onBack }: RaceScreenProps) {
       <div className="absolute inset-0 pointer-events-none flex flex-col">
         {/* Top HUD bar */}
         <div className="flex items-center justify-between px-3 pt-2 gap-2">
-          {/* Score (top-left in RTL = right side visually) */}
+          {/* Score — fixed-size box, only the number changes inside */}
           <div
             className="flex items-center gap-1.5 px-3 py-1 rounded-2xl shadow-lg"
-            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', pointerEvents: 'none' }}
+            style={{
+              background: 'rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(4px)',
+              pointerEvents: 'none',
+              minWidth: '5.5rem',
+              justifyContent: 'center',
+            }}
           >
             <span className="text-yellow-300" style={{ fontSize: '0.75rem' }}>⭐</span>
             <span
               className="text-white"
-              style={{ fontWeight: 900, fontSize: 'clamp(0.85rem, 2.5vw, 1.2rem)', fontFamily: "'Cairo', sans-serif" }}
+              style={{
+                fontWeight: 900,
+                fontSize: 'clamp(0.85rem, 2.5vw, 1.2rem)',
+                fontFamily: "'Cairo', sans-serif",
+                display: 'inline-block',
+                minWidth: '3rem',
+                textAlign: 'center',
+              }}
             >
               {toArabicNumerals(score)}
             </span>
@@ -546,27 +855,6 @@ export function RaceScreen({ level, onGameOver, onBack }: RaceScreenProps) {
 
         {/* Spacer */}
         <div className="flex-1" />
-
-        {/* Touch controls */}
-        <div className="flex justify-between px-2 pb-2 pointer-events-all">
-          <button
-            onTouchStart={(e) => { e.preventDefault(); moveLeft(); }}
-            onClick={moveLeft}
-            className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
-            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', border: '2px solid rgba(255,255,255,0.3)' }}
-          >
-            <span className="text-white text-2xl">▶</span>
-          </button>
-
-          <button
-            onTouchStart={(e) => { e.preventDefault(); moveRight(); }}
-            onClick={moveRight}
-            className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
-            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', border: '2px solid rgba(255,255,255,0.3)' }}
-          >
-            <span className="text-white text-2xl">◀</span>
-          </button>
-        </div>
       </div>
 
       {/* ── PAUSE OVERLAY ── */}

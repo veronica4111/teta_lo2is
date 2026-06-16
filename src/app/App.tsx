@@ -235,6 +235,11 @@ function TitleScreen({ onStart }: { onStart: () => void }) {
         transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
         className="flex flex-col items-center gap-3 z-10 mb-8"
       >
+        <img 
+          src="logos/logo.png" 
+          alt="Teta Lo2is Logo" 
+          className="w-32 h-auto object-contain mb-2 drop-shadow-lg"
+        />
         <div
           className="px-10 py-4 rounded-3xl shadow-2xl text-center"
           style={{
