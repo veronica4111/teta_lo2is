@@ -1,0 +1,153 @@
+Design a complete UI/UX kit in Figma for "تيتا لوئيس" (Tita Louis), an Arabic
+(Egyptian dialect) RTL educational OBSTACLE AVOIDANCE racing game for children
+ages 4-10. This is NOT a lap-based race — it is an endless-runner / lane-dodging
+survival game where a car drives down a straight road, dodging incoming obstacle
+cars while fuel continuously drains, with a "Gas Station" quiz checkpoint at 25%
+fuel. The game has 6 levels, each with unique story video, quiz content, and
+audio.
+
+All UI text must be in Arabic, written in EGYPTIAN ARABIC dialect (e.g., use
+"كويس" instead of formal "جيد", "تعالى نلعب" instead of overly formal phrasing),
+with RTL layout direction throughout (back buttons on the right, progress
+indicators filling right-to-left, mirrored HUD placement).
+
+Canvas sizes: Primary = mobile landscape 844x390px. Secondary variant = desktop/
+tablet landscape 1280x720px. (Both variants are optimized for landscape orientation).
+
+=====================================================================
+SCREEN 1: RACE_RUNNING (Main Obstacle Avoidance Gameplay View)
+=====================================================================
+Match the composition of a third-person, behind-the-car view of a straight
+road receding toward the horizon — exactly like a classic arcade obstacle-
+dodging racer designed for a wide landscape aspect ratio:
+
+- Background (top ~35%): sky gradient from light blue at top to near-white at
+  the horizon, with a few soft cartoon clouds scattered across the wide view.
+- Midground: rolling green hills along the horizon line, framed by decorative
+  scenery — palm trees, leafy trees, small rock formations, and patches of
+  greenery — lining both sides of the road. These scroll slowly for a parallax
+  effect.
+- Road: a straight grey asphalt road in 3-point perspective (narrow at the
+  horizon, wide at the bottom), with a white dashed centerline and solid white
+  edge lines on both sides. Design the road with 3 visible lanes for dodging,
+  spaced comfortably across the wide screen.
+- Obstacle cars: place 2-3 colored obstacle cars in different lanes at varying
+  distances — smaller/higher near the horizon, larger/lower as they approach
+  the player — representing the cars the player must avoid colliding with.
+- Player car: large, bottom-center, only the top/back half visible (cropped by
+  the bottom screen edge), in a bright kid-friendly color (red or orange),
+  positioned in one of the 3 lanes with clear visual indication it can shift
+  left/right.
+
+HUD overlay (RTL-mirrored):
+- Top-right: Fuel gauge — horizontal bar with fuel-pump icon, color-coded
+  (green above 50%, yellow 25-50%, red below 25%).
+- Top-left: Score counter in large Arabic-Indic or Arabic numerals.
+- Top-center: small circular pause button.
+- Optional: 3 small dot indicators showing the player's current lane.
+
+Design 3 frames for this screen:
+1. "04_السباق_عادي" — normal driving, fuel above 25%, neutral HUD colors.
+2. "04_السباق_وقود_منخفض" — fuel between 5-25%, fuel gauge pulsing red, subtle
+   red vignette at screen edges.
+3. "04_السباق_وقود_حرج" — fuel below 5%, stronger red vignette, fuel gauge
+   flashing, urgency cues.
+
+=====================================================================
+SCREEN 2: محطة الوقود (GAS_STATION — Quiz Checkpoint Modal)
+=====================================================================
+Triggers when fuel reaches 25% (one time per attempt). The race view freezes
+(dimmed/slightly blurred background), and a landscape-optimized modal slides up 
+from the bottom covering ~70-85% of the screen. The player answers 3 questions in sequence.
+
+Modal header:
+- Friendly cartoon gas-station illustration (fuel pump or small station
+  building, matching the game's bright art style).
+- Title in Egyptian Arabic: "محطة الوقود!" 
+- Progress indicator showing "سؤال ١ من ٣" (Question 1 of 3), with 3 dot/
+  segment markers in RTL order.
+
+Question card (design for Q1, reusable for Q2/Q3):
+- Large centered question text in Egyptian Arabic, RTL.
+- Prominent audio-playback button with sound-wave icon (each question has its
+  own narrated audio file — tap to hear the question read aloud).
+- 2-4 large illustrated answer buttons with Arabic text, sized for small
+  children's touch targets, arranged side-by-side or in a wide landscape layout.
+
+Feedback states (shown briefly after each answer):
+- CORRECT: green checkmark animation, "+٢٥٪ وقود" floating animation toward the
+  fuel gauge, encouraging text "تمام!" or "برافو!"
+- INCORRECT: gentle orange/neutral tone (not harsh red), no fuel change shown,
+  encouraging text like "معلش، حاول تاني!" — then proceeds automatically to
+  the next question (no retry of same question).
+
+Footer/exit:
+- After Question 3, fuel gauge animates filling based on total correct answers
+  (0%, 25%, 50%, or 75% added, fuel capped at 100%).
+- Short "هنرجع للسباق..." (Resuming race...) message with a 3-2-1 countdown
+  before the modal slides away and gameplay resumes.
+
+Design these frames:
+- "05_محطة_الوقود_سؤال١_عادي"
+- "05_محطة_الوقود_سؤال١_صحيح"
+- "05_محطة_الوقود_سؤال١_غلط"
+- (repeat naming pattern for سؤال٢ and سؤال٣)
+
+=====================================================================
+SCREEN 3: نتيجة السباق (RESULTS — Win/Loss)
+=====================================================================
+Two distinct landscape frames sharing the same button layout:
+
+WIN ("06_النتيجة_فوز"):
+- Bright celebratory background — confetti, stars, warm colors.
+- Headline: "أحسنت يا بطل!" or "كسبت!"
+- Large score display in Arabic numerals.
+- Star rating (1-3 stars, filled based on score).
+- Two buttons arranged horizontally: "إعادة المحاولة" (Retry) and "رجوع للمستويات" (Back to Levels).
+
+LOSS ("06_النتيجة_خسارة"):
+- Soft, encouraging (not punishing) illustration — car with empty fuel gauge,
+  friendly character shrugging.
+- Headline: "خلصت بنزين! جرب تاني" (You ran out of fuel! Try again) — warm,
+  non-discouraging tone for young kids.
+- Score reached still displayed, to motivate improvement.
+- Same horizontal Retry / Back to Levels button layout as the WIN screen.
+
+=====================================================================
+SCREEN 4: اختيار المستوى (LEVEL_SELECT — 6 Levels)
+=====================================================================
+A horizontal carousel or a wide 3x2 grid layout showing 6 level tiles, each with:
+- Unique placeholder thumbnail illustration labeled "رسم المستوى ١" through
+  "رسم المستوى ٦".
+- Level name in Arabic (e.g., "المستوى الأول", "المستوى الثاني", etc.).
+- Star rating earned (0-3 stars, empty outline if unplayed).
+- Optional lock icon overlay for locked levels (flag as a design decision).
+
+Annotate clearly that each level tile, when tapped, loads a DIFFERENT story
+video and a DIFFERENT set of 3 quiz questions (each with its own audio file) —
+no content is shared between levels unless explicitly configured.
+
+=====================================================================
+SHARED COMPONENT LIBRARY PAGE
+=====================================================================
+Create a components page including:
+- Fuel gauge component with 5 fill-state variants (0%, 25%, 50%, 75%, 100%)
+  and 3 color states (green/yellow/red).
+- HUD buttons (pause, audio toggle).
+- Answer option button (default / correct / incorrect states).
+- Star rating component (0-3 stars).
+- Primary/secondary CTA buttons (إعادة المحاولة, رجوع, استمرار).
+- Color palette matching the reference: sky blue, grass green, asphalt grey,
+  warm red/orange accents for player car and primary CTAs.
+- Typography: a rounded, highly legible Arabic font suitable for children
+  (e.g., Cairo, Tajawal, or Baloo Bhaijaan 2), paired with a friendly Latin/
+  numeral font for scores.
+
+=====================================================================
+FRAME NAMING & ANNOTATIONS
+=====================================================================
+Name every frame using the Arabic labels shown above (with numeric prefixes
+for ordering), and add Figma comments on each frame referencing the game-state
+condition it represents (e.g., "يظهر عندما الوقود <= ٢٥٪ و لم تتم زيارة محطة
+الوقود من قبل" / "shown when fuel <= 25% and gasStationVisited == false"), so
+the design maps cleanly to the game's state machine for developer handoff.
