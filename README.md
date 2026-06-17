@@ -37,7 +37,7 @@ Make sure you have [Node.js](https://nodejs.org/) installed on your machine.
 
 1. Clone the repository and navigate into the project directory:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/veronica4111/teta_lo2is.git
    cd teta_lo2is_v2
    ```
 
